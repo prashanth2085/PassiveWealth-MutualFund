@@ -184,15 +184,25 @@ if st.button("🔍 Run Wealth Analysis", type="primary"):
 
 st.divider()
 
-# --- NFO GAME PLAN MODULE ---
-with st.expander("🆕 Scouting an NFO (New Fund Offering)? Open the Manual Game Plan"):
-    st.write("Math engines cannot predict NFOs because they have zero historical data. When a promising NFO opens, put the math away and use this Fundamental Checklist:")
+# --- NFO GAME PLAN & RADAR MODULE ---
+with st.expander("📡 Live NFO Radar & Manual Game Plan (April 2026)"):
+    st.write("Math engines cannot predict NFOs because they lack historical data. Below is the active research radar for this month, followed by the Fundamental Checklist to evaluate them:")
     
+    st.write("### 🗓️ Active NFO Radar (April 2026)")
+    nfo_data = [
+        {"Fund Name": "Kotak Multi Asset Active FoF", "Category": "Hybrid (Multi-Asset)", "Closes": "Apr 22", "Verdict": "Strong for structured asset allocation. Mechanically diversifies across equity, debt, and gold."},
+        {"Fund Name": "Axis Nifty India Defence Index", "Category": "Thematic Equity", "Closes": "Apr 24", "Verdict": "High hype. Very difficult to find underlying stocks here maintaining ROE > 15% and D/E < 1."},
+        {"Fund Name": "Groww Arbitrage Fund", "Category": "Hybrid (Arbitrage)", "Closes": "Apr 22", "Verdict": "Low-risk, tax-efficient parking for fresh capital waiting for market dips."},
+        {"Fund Name": "SBI CRISIL-IBX Fin. Services", "Category": "Debt Index", "Closes": "Apr 20", "Verdict": "Short-term debt parking (3-12 months)."}
+    ]
+    st.table(pd.DataFrame(nfo_data))
+    
+    st.write("### 🛡️ The NFO Scouting Checklist")
     colA, colB, colC = st.columns(3)
     with colA:
         st.info("**1. Examine the AMC**\n\nDoes the parent company have a proven track record? (e.g., Quant, Parag Parikh). A brand new, unknown AMC requires extreme caution.")
     with colB:
-        st.info("**2. Verify the Theme**\n\nIs it a broad fund or a highly specific theme (like EV/Green Energy)? Thematic funds often launch at the absolute peak of a bubble.")
+        st.info("**2. Verify the Theme**\n\nIs it a broad fund or a highly specific theme (like Defence or EV)? Thematic funds often launch at the absolute peak of a bubble.")
     with colC:
         st.info("**3. Check Expense Ratio**\n\nNFOs start with lower AUM, which can lead to higher early expense ratios. Don't overpay just for novelty.")
     
