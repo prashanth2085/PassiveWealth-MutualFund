@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-
+import random
 # --- CUSTOM MATH & SIMULATION FUNCTIONS ---
 def calculate_rsi(prices, window=14):
     delta = prices.diff()
