@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import random
+
 # --- CUSTOM MATH & SIMULATION FUNCTIONS ---
 def calculate_rsi(prices, window=14):
     delta = prices.diff()
@@ -17,10 +18,8 @@ def calculate_cagr(start_value, end_value, years):
     return ((end_value / start_value) ** (1 / years) - 1) * 100
 
 def simulate_sip(price_series, monthly_investment):
-    # Group by Year and Month to simulate buying on the 1st of every month
     df = price_series.to_frame(name='NAV')
     df['YearMonth'] = df.index.to_period('M')
-    # Get the first available NAV of each month
     monthly_data = df.groupby('YearMonth').first()
     
     monthly_data['Units_Bought'] = monthly_investment / monthly_data['NAV']
@@ -31,18 +30,15 @@ def simulate_sip(price_series, monthly_investment):
     return monthly_data
 
 def calculate_fd_sip(months, monthly_investment, annual_rate=0.07):
-    # Standard Future Value of an Annuity formula for SIP into an FD
     monthly_rate = annual_rate / 12
     values = []
     for m in range(1, months + 1):
-        # FV = P * [ ( (1+r)^n - 1 ) / r ] * (1+r)
         fv = monthly_investment * (((1 + monthly_rate)**m - 1) / monthly_rate) * (1 + monthly_rate)
         values.append(fv)
     return values
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_data(mf_symbol, benchmark_symbol="^NSEI"):
-    # Fetch both the Mutual Fund and Nifty 50 for 5 years
     mf_data = yf.Ticker(mf_symbol).history(period="5y")
     nifty_data = yf.Ticker(benchmark_symbol).history(period="5y")
     return mf_data, nifty_data
@@ -81,12 +77,12 @@ st.write("<br>", unsafe_allow_html=True)
 
 # 3. The "Analyze" Button Logic
 if st.button("🔍 Run Wealth Analysis", type="primary"):
-    with st.spinner("Crunching 5-Year Data & Running SIP Simulations..."):
+    with st.spinner("Crunching Data & Running SIP Simulations..."):
         try:
             mf_hist, nifty_hist = fetch_data(target_symbol)
             
-            if len(mf_hist) < 250: # Roughly 1 year of trading days
-                st.error("❌ Not enough historical data found. Check the ticker symbol.")
+            if len(mf_hist) < 30:
+                st.error("❌ This fund is too new (less than 1 month of data). Mathematical models require at least 30 days of trading history.")
             else:
                 current_nav = mf_hist['Close'].iloc[-1]
                 all_time_high = mf_hist['Close'].max()
@@ -96,29 +92,40 @@ if st.button("🔍 Run Wealth Analysis", type="primary"):
                 daily_returns = mf_hist['Close'].pct_change()
                 annual_volatility = daily_returns.std() * np.sqrt(252) * 100
                 
-                # Calculate True CAGR mathematically
+                # --- DYNAMIC CAGR CALCULATOR ---
                 nav_1y_ago = mf_hist['Close'].iloc[-252] if len(mf_hist) >= 252 else None
                 nav_3y_ago = mf_hist['Close'].iloc[-756] if len(mf_hist) >= 756 else None
-                nav_5y_ago = mf_hist['Close'].iloc[0] # First available
+                nav_5y_ago = mf_hist['Close'].iloc[0] if len(mf_hist) >= 1260 else None
                 
-                cagr_1y = calculate_cagr(nav_1y_ago, current_nav, 1) if nav_1y_ago else 0
-                cagr_3y = calculate_cagr(nav_3y_ago, current_nav, 3) if nav_3y_ago else 0
-                cagr_5y = calculate_cagr(nav_5y_ago, current_nav, len(mf_hist)/252)
+                cagr_1y = calculate_cagr(nav_1y_ago, current_nav, 1) if nav_1y_ago else None
+                cagr_3y = calculate_cagr(nav_3y_ago, current_nav, 3) if nav_3y_ago else None
+                
+                if nav_5y_ago:
+                    cagr_5y = calculate_cagr(nav_5y_ago, current_nav, 5)
+                    cagr_5y_label = "5-Year CAGR"
+                else:
+                    days_alive = len(mf_hist)
+                    years_alive = days_alive / 252
+                    cagr_5y = calculate_cagr(mf_hist['Close'].iloc[0], current_nav, years_alive)
+                    cagr_5y_label = "Since Inception CAGR"
                 
                 mf_hist['RSI'] = calculate_rsi(mf_hist['Close'])
                 current_rsi = mf_hist['RSI'].iloc[-1]
-                mf_hist['EMA_200'] = mf_hist['Close'].ewm(span=200, adjust=False).mean()
-                current_ema_200 = mf_hist['EMA_200'].iloc[-1]
+                
+                if len(mf_hist) >= 200:
+                    mf_hist['EMA_200'] = mf_hist['Close'].ewm(span=200, adjust=False).mean()
+                    current_ema_200 = mf_hist['EMA_200'].iloc[-1]
+                else:
+                    current_ema_200 = None
                 
                 # --- DISPLAY VITAL FACTORS ---
                 st.subheader("🧬 Fund Vital Factors (Mathematical)")
-                st.write("*Note: Exit Loads and Expense Ratios must be verified with the AMC. These metrics are pure mathematical reality.*")
                 
                 v_c1, v_c2, v_c3, v_c4, v_c5 = st.columns(5)
                 v_c1.metric("Current NAV", f"₹{current_nav:.2f}", f"{drawdown_pct:.2f}% from ATH")
-                v_c2.metric("1-Year CAGR", f"{cagr_1y:.2f}%")
-                v_c3.metric("3-Year CAGR", f"{cagr_3y:.2f}%" if cagr_3y else "N/A")
-                v_c4.metric("5-Year CAGR", f"{cagr_5y:.2f}%")
+                v_c2.metric("1-Year CAGR", f"{cagr_1y:.2f}%" if cagr_1y is not None else "N/A (Too New)")
+                v_c3.metric("3-Year CAGR", f"{cagr_3y:.2f}%" if cagr_3y is not None else "N/A (Too New)")
+                v_c4.metric(cagr_5y_label, f"{cagr_5y:.2f}%")
                 v_c5.metric("Volatility (Risk)", f"{annual_volatility:.2f}%", "Lower is safer" if annual_volatility < 15 else "High Risk", delta_color="inverse")
                 
                 st.divider()
@@ -129,7 +136,7 @@ if st.button("🔍 Run Wealth Analysis", type="primary"):
                 if drawdown_pct <= -15 and current_rsi < 40:
                     st.success(f"🎯 **ACTION: AGGRESSIVE LUMP SUM.**")
                     st.write(f"The fund is in a deep correction ({drawdown_pct:.2f}%) and mathematically oversold. Deploy your SIP + any extra cash reserves now.")
-                elif current_nav < current_ema_200:
+                elif current_ema_200 is not None and current_nav < current_ema_200:
                     st.info(f"📈 **ACTION: INCREASE SIP.**")
                     st.write(f"The NAV is below its 200-Day average. You are buying at a long-term discount. Increase your ₹{monthly_budget} SIP by 20% this month if possible.")
                 elif drawdown_pct > -5 and current_rsi > 70:
@@ -142,52 +149,54 @@ if st.button("🔍 Run Wealth Analysis", type="primary"):
                 st.divider()
 
                 # --- THE ULTIMATE BENCHMARK GRAPH ---
-                st.subheader("🏁 5-Year SIP Reality Check: MF vs Nifty 50 vs FD")
-                st.write(f"*If you invested ₹{monthly_budget} every month for the last 5 years, here is exactly where your money would be today.*")
+                st.subheader("🏁 SIP Reality Check: MF vs Nifty 50 vs FD")
                 
-                # Run Simulations
+                nifty_hist_matched = nifty_hist.loc[nifty_hist.index >= mf_hist.index[0]]
                 mf_sip = simulate_sip(mf_hist['Close'], monthly_budget)
-                nifty_sip = simulate_sip(nifty_hist['Close'], monthly_budget)
+                nifty_sip = simulate_sip(nifty_hist_matched['Close'], monthly_budget)
                 
-                # Make sure lengths match for FD simulation
                 total_months = len(mf_sip)
                 fd_values = calculate_fd_sip(total_months, monthly_budget, 0.07)
                 
                 total_invested = mf_sip['Total_Invested'].iloc[-1]
                 mf_final = mf_sip['Portfolio_Value'].iloc[-1]
-                nifty_final = nifty_sip['Portfolio_Value'].iloc[-1]
-                fd_final = fd_values[-1]
+                nifty_final = nifty_sip['Portfolio_Value'].iloc[-1] if len(nifty_sip) > 0 else 0
+                fd_final = fd_values[-1] if len(fd_values) > 0 else 0
                 
-                # Plotly Chart
                 fig = go.Figure()
-                
-                # Format timestamps for x-axis
                 x_axis = mf_sip.index.astype(str)
-                
                 fig.add_trace(go.Scatter(x=x_axis, y=mf_sip['Portfolio_Value'], mode="lines", name=f"Selected Fund (₹{mf_final:,.0f})", line=dict(color="#00BFFF", width=3)))
                 fig.add_trace(go.Scatter(x=x_axis, y=nifty_sip['Portfolio_Value'], mode="lines", name=f"Nifty 50 Index (₹{nifty_final:,.0f})", line=dict(color="#32CD32", width=2)))
                 fig.add_trace(go.Scatter(x=x_axis, y=fd_values, mode="lines", name=f"7% Fixed Deposit (₹{fd_final:,.0f})", line=dict(color="orange", width=2, dash="dash")))
                 fig.add_trace(go.Scatter(x=x_axis, y=mf_sip['Total_Invested'], mode="lines", name=f"Total Invested (₹{total_invested:,.0f})", line=dict(color="gray", width=1, dash="dot")))
                 
-                fig.update_layout(
-                    height=450, 
-                    margin=dict(l=0, r=0, t=10, b=10), 
-                    plot_bgcolor="rgba(0,0,0,0)", 
-                    paper_bgcolor="rgba(0,0,0,0)", 
-                    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01, bgcolor="rgba(0,0,0,0.5)", font=dict(color="white")),
-                    yaxis=dict(tickprefix="₹")
-                )
+                fig.update_layout(height=450, margin=dict(l=0, r=0, t=10, b=10), plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01, bgcolor="rgba(0,0,0,0.5)", font=dict(color="white")), yaxis=dict(tickprefix="₹"))
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Summary Box
                 st.write("### 🏆 The Verdict")
                 if mf_final > nifty_final:
-                    st.success(f"**Alpha Generator:** This fund successfully beat the Nifty 50 benchmark by **₹{(mf_final - nifty_final):,.0f}** over the simulated period.")
+                    st.success(f"**Alpha Generator:** This fund successfully beat the Nifty 50 benchmark by **₹{(mf_final - nifty_final):,.0f}** over its lifespan.")
                 else:
                     st.error(f"**Underperformer:** An active investment in this fund lost to a passive Nifty 50 Index fund by **₹{(nifty_final - mf_final):,.0f}**. Re-evaluate if the AMC fees are worth it.")
 
         except Exception as e:
             st.error(f"An error occurred. Details: {e}")
+
+st.divider()
+
+# --- NFO GAME PLAN MODULE ---
+with st.expander("🆕 Scouting an NFO (New Fund Offering)? Open the Manual Game Plan"):
+    st.write("Math engines cannot predict NFOs because they have zero historical data. When a promising NFO opens, put the math away and use this Fundamental Checklist:")
+    
+    colA, colB, colC = st.columns(3)
+    with colA:
+        st.info("**1. Examine the AMC**\n\nDoes the parent company have a proven track record? (e.g., Quant, Parag Parikh). A brand new, unknown AMC requires extreme caution.")
+    with colB:
+        st.info("**2. Verify the Theme**\n\nIs it a broad fund or a highly specific theme (like EV/Green Energy)? Thematic funds often launch at the absolute peak of a bubble.")
+    with colC:
+        st.info("**3. Check Expense Ratio**\n\nNFOs start with lower AUM, which can lead to higher early expense ratios. Don't overpay just for novelty.")
+    
+    st.warning("⚠️ **THE GOLDEN RULE:** Never deploy your full capital on day one. Treat an NFO like a venture capital bet. Start a small SIP, wait 6 to 12 months for the fund to generate enough data to feed into this Wealth Engine, and *then* let the math tell you if it's worth scaling up.")
 
 # --- MOTIVATIONAL FOOTER ---
 st.write("<br><br>", unsafe_allow_html=True)
@@ -197,4 +206,4 @@ quotes = [
     "\"Time in the market beats timing the market.\"",
     "\"In the short run, the market is a voting machine but in the long run, it is a weighing machine.\" – Benjamin Graham"
 ]
-st.markdown(f"> *{random.choice(quotes)}*")
+st.markdown(f"<p style='text-align: center; color: gray;'><i>{random.choice(quotes)}</i></p>", unsafe_allow_html=True)
