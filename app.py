@@ -44,12 +44,35 @@ def fetch_data(mf_symbol, benchmark_symbol="^NSEI"):
     return mf_data, nifty_data
 
 # --- MUTUAL FUND DICTIONARY ---
+# --- MUTUAL FUND DICTIONARY ---
 MF_DICT = {
+    # --- Flexi Cap / Multi Cap ---
     "Parag Parikh Flexi Cap Fund": "0P0000XVAA.BO",
+    "Quant Active Fund": "0P0000XVTR.BO",
+    "SBI Flexicap Fund": "0P0000XVWP.BO", 
+    
+    # --- Small Cap ---
     "Quant Small Cap Fund": "0P0000XVU4.BO",
     "Nippon India Small Cap Fund": "0P0000XVYC.BO",
     "SBI Small Cap Fund": "0P0000XW14.BO",
+    "Axis Small Cap Fund": "0P0000XW8F.BO",
+    
+    # --- Mid Cap ---
+    "HDFC Mid-Cap Opportunities Fund": "0P0000XVU0.BO",
+    "Kotak Emerging Equity Fund": "0P0000XVWQ.BO",
+    "Motilal Oswal Midcap Fund": "0P0000XW6H.BO",
+    
+    # --- Large Cap & Index ---
     "HDFC Index Fund Nifty 50": "0P0000XVTL.BO",
+    "UTI Nifty 50 Index Fund": "0P0000XVXM.BO",
+    "Mirae Asset Large Cap Fund": "0P0000XVU6.BO",
+    "ICICI Prudential Bluechip Fund": "0P0000XW01.BO",
+    
+    # --- ELSS (Tax Saving) ---
+    "Quant ELSS Tax Saver Fund": "0P0000XVU5.BO",
+    "DSP ELSS Tax Saver Fund": "0P0000XVU9.BO",
+    
+    # --- Custom Fallback ---
     "Custom (Enter Symbol Below)": "CUSTOM"
 }
 
