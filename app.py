@@ -373,7 +373,7 @@ with tab2:
                     "REASON": reason
                 })
             
-                        st.divider()
+            st.divider()
             st.subheader("📋 Executive Summary")
             st.error(f"**The Problem: {len(edited_mf_df)} Funds Analyzed, {clutter_count} Negligible Positions Detected.**\nRationalize to 4–5 funds with clear, non-overlapping mandates to maximize compounding and minimize administrative tracking.")
             st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
@@ -425,6 +425,8 @@ with tab2:
                         st.error(f"Failed to send to Telegram: {resp.text}")
                 except Exception as e:
                     st.error(f"Telegram API Error: {e}")
+
+st.divider()
 
 # --- NFO GAME PLAN & RADAR MODULE ---
 with st.expander("📡 Live NFO Radar & Manual Game Plan (April 2026)"):
