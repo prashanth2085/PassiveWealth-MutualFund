@@ -240,15 +240,16 @@ with tab1:
                 st.error(f"An error occurred. Details: {e}")
 
 # ==========================================
-# TAB 2: PORTFOLIO RATIONALIZER (CSV UPLOAD)
+# TAB 2: PORTFOLIO RATIONALIZER (FILE UPLOAD)
 # ==========================================
 with tab2:
     st.header("🧹 Mutual Fund Rationalizer")
-    st.write("Upload your Zerodha `holdings.xlsx - Mutual Funds.csv` to instantly detect overlap, eliminate clutter, and optimize your SIPs.")
+    st.write("Upload your Zerodha `holdings.xlsx` (or CSV) to instantly detect overlap, eliminate clutter, and optimize your SIPs.")
     
     col_up, col_sip = st.columns(2)
     with col_up:
-        uploaded_file = st.file_uploader("Upload Zerodha Coin CSV", type=["csv"])
+        # --- NOW ACCEPTS BOTH CSV AND XLSX ---
+        uploaded_file = st.file_uploader("Upload Zerodha Coin File", type=["csv", "xlsx"])
     with col_sip:
         sip_budget = st.number_input("Target Monthly SIP Budget (₹)", value=20000, step=1000, key="rationalizer_budget")
         
@@ -256,17 +257,31 @@ with tab2:
     
     if uploaded_file is not None:
         try:
-            # Smart CSV Parser: Scans to ignore the ~22 lines of blank/account details
-            raw_df = pd.read_csv(uploaded_file, header=None)
+            file_ext = uploaded_file.name.split('.')[-1].lower()
+            
+            # Read the raw file to find where the actual table starts (bypassing the 22 rows of junk)
+            if file_ext == 'csv':
+                raw_df = pd.read_csv(uploaded_file, header=None)
+            else:
+                raw_df = pd.read_excel(uploaded_file, header=None)
+                
             header_mask = raw_df.apply(lambda row: row.astype(str).str.contains('Instrument|Scheme|Symbol', case=False).any(), axis=1)
             header_row_idx = raw_df[header_mask].index
             
+            # Reset file pointer to read again properly
+            uploaded_file.seek(0)
+            
             if len(header_row_idx) > 0:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, skiprows=header_row_idx[0])
+                skip_rows = int(header_row_idx[0])
+                if file_ext == 'csv':
+                    df = pd.read_csv(uploaded_file, skiprows=skip_rows)
+                else:
+                    df = pd.read_excel(uploaded_file, skiprows=skip_rows)
             else:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file)
+                if file_ext == 'csv':
+                    df = pd.read_csv(uploaded_file)
+                else:
+                    df = pd.read_excel(uploaded_file)
             
             # Standardize Columns
             col_mapping = {
@@ -284,7 +299,7 @@ with tab2:
             display_df = df[["Fund Name", "Invested (₹)", "Current Value (₹)"]].copy()
             
         except Exception as e:
-            st.error(f"Error parsing CSV. Please ensure it is the Mutual Funds file. Details: {e}")
+            st.error(f"Error parsing file. Please ensure it is the correct holdings file. Details: {e}")
             display_df = pd.DataFrame(columns=["Fund Name", "Invested (₹)", "Current Value (₹)"])
     else:
         # Dummy data so the screen isn't empty before upload
