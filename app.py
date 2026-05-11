@@ -248,7 +248,6 @@ with tab2:
     
     col_up, col_sip = st.columns(2)
     with col_up:
-        # --- NOW ACCEPTS BOTH CSV AND XLSX ---
         uploaded_file = st.file_uploader("Upload Zerodha Coin File", type=["csv", "xlsx"])
     with col_sip:
         sip_budget = st.number_input("Target Monthly SIP Budget (₹)", value=20000, step=1000, key="rationalizer_budget")
@@ -291,9 +290,12 @@ with tab2:
             }
             df.rename(columns=col_mapping, inplace=True)
             
-            # If standard Investment Value is missing but Avg Price and Qty exist
+            # --- THE FIX: SMART CALCULATOR FOR CONSOLE EXPORTS ---
             if "Invested (₹)" not in df.columns and "Average Price" in df.columns and "Quantity Available" in df.columns:
                 df["Invested (₹)"] = df["Average Price"] * df["Quantity Available"]
+                
+            if "Current Value (₹)" not in df.columns and "Previous Closing Price" in df.columns and "Quantity Available" in df.columns:
+                df["Current Value (₹)"] = df["Previous Closing Price"] * df["Quantity Available"]
                 
             df = df.dropna(subset=["Fund Name", "Current Value (₹)"])
             display_df = df[["Fund Name", "Invested (₹)", "Current Value (₹)"]].copy()
