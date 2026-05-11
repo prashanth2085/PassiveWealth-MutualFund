@@ -373,24 +373,30 @@ with tab2:
                     "REASON": reason
                 })
             
-            st.divider()
+                        st.divider()
             st.subheader("📋 Executive Summary")
             st.error(f"**The Problem: {len(edited_mf_df)} Funds Analyzed, {clutter_count} Negligible Positions Detected.**\nRationalize to 4–5 funds with clear, non-overlapping mandates to maximize compounding and minimize administrative tracking.")
             st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
             
             st.divider()
             st.subheader(f"🎯 Recommended SIP Plan (Budget: ₹{sip_budget:,.0f}/month)")
-            st.write("Based on your desired monthly budget, here is the exact mathematical split to achieve a rationalized, 4-fund core portfolio:")
+            st.write("Based on your portfolio analysis, here is where your monthly SIPs should be directed:")
             
+            # --- NEW: DYNAMIC FUND MAPPING ---
+            best_index = next((r['FUND'] for r in results if r['TYPE'] == 'Index' and ('KEEP' in r['VERDICT'] or 'HOLD' in r['VERDICT'])), "⚠️ [No Index Fund Found - Buy Nifty 50]")
+            best_flexi = next((r['FUND'] for r in results if r['TYPE'] == 'Flexi Cap' and ('KEEP' in r['VERDICT'] or 'HOLD' in r['VERDICT'])), "⚠️ [No Flexi Cap Found - Buy Parag Parikh]")
+            best_hybrid = next((r['FUND'] for r in results if r['TYPE'] == 'Hybrid' and ('KEEP' in r['VERDICT'] or 'HOLD' in r['VERDICT'])), "⚠️ [No Hybrid Found - Buy Multi-Asset]")
+            best_alpha = next((r['FUND'] for r in results if r['TYPE'] in ['Small Cap', 'Mid Cap'] and ('KEEP' in r['VERDICT'] or 'HOLD' in r['VERDICT'])), "⚠️ [No Small/Mid Cap Found]")
+
             target_pf = [
-                {"Fund Role": "Core Nifty 50 Index", "Target Allocation": "40%", "Recommended SIP": f"₹{sip_budget * 0.40:,.0f}"},
-                {"Fund Role": "Proven Flexi Cap", "Target Allocation": "30%", "Recommended SIP": f"₹{sip_budget * 0.30:,.0f}"},
-                {"Fund Role": "Hybrid / Multi-Asset", "Target Allocation": "20%", "Recommended SIP": f"₹{sip_budget * 0.20:,.0f}"},
-                {"Fund Role": "Alpha Generator (Small/Mid Cap)", "Target Allocation": "10%", "Recommended SIP": f"₹{sip_budget * 0.10:,.0f}"}
+                {"Category": "Core Nifty 50", "Your Selected Fund": best_index, "Allocation": "40%", "Recommended SIP": f"₹{sip_budget * 0.40:,.0f}"},
+                {"Category": "Proven Flexi Cap", "Your Selected Fund": best_flexi, "Allocation": "30%", "Recommended SIP": f"₹{sip_budget * 0.30:,.0f}"},
+                {"Category": "Hybrid / Multi-Asset", "Your Selected Fund": best_hybrid, "Allocation": "20%", "Recommended SIP": f"₹{sip_budget * 0.20:,.0f}"},
+                {"Category": "Alpha (Small/Mid Cap)", "Your Selected Fund": best_alpha, "Allocation": "10%", "Recommended SIP": f"₹{sip_budget * 0.10:,.0f}"}
             ]
             st.table(pd.DataFrame(target_pf))
 
-            # --- NEW: TELEGRAM LOGIC FOR RATIONALIZER ---
+            # --- UPDATED: TELEGRAM LOGIC WITH SPECIFIC FUNDS ---
             if send_rat_alert:
                 tg_msg = "🧹 *Mutual Fund Rationalization Plan*\n\n"
                 tg_msg += f"⚠️ *Status:* {len(edited_mf_df)} Funds Analyzed | {clutter_count} Junk Positions.\n\n"
@@ -403,7 +409,8 @@ with tab2:
                 
                 tg_msg += f"\n🎯 *Recommended SIP (₹{sip_budget:,.0f}/mo):*\n"
                 for t in target_pf:
-                    tg_msg += f"• {t['Target Allocation']} {t['Fund Role']} -> {t['Recommended SIP']}\n"
+                    fund_clean = t['Your Selected Fund'].replace('⚠️', '').strip()
+                    tg_msg += f"• {t['Allocation']} {t['Category']} -> {t['Recommended SIP']}\n  └ *{fund_clean}*\n"
                 
                 bot_token = "8701094564:AAFQER8tQAl2NwGEkKsY1LTV5zUP_7gT4Tg"
                 chat_id = "7927166007"
@@ -418,8 +425,6 @@ with tab2:
                         st.error(f"Failed to send to Telegram: {resp.text}")
                 except Exception as e:
                     st.error(f"Telegram API Error: {e}")
-
-st.divider()
 
 # --- NFO GAME PLAN & RADAR MODULE ---
 with st.expander("📡 Live NFO Radar & Manual Game Plan (April 2026)"):
