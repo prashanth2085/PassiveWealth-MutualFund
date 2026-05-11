@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import random
+import requests  # --- NEW IMPORT FOR TELEGRAM ---
 
 # --- CUSTOM MATH & SIMULATION FUNCTIONS ---
 def calculate_rsi(prices, window=14):
@@ -43,7 +44,6 @@ def fetch_data(mf_symbol, benchmark_symbol="^NSEI"):
     nifty_data = yf.Ticker(benchmark_symbol).history(period="5y")
     return mf_data, nifty_data
 
-# --- MUTUAL FUND DICTIONARY ---
 # --- MUTUAL FUND DICTIONARY ---
 MF_DICT = {
     # --- Flexi Cap / Multi Cap ---
@@ -95,6 +95,9 @@ with col2:
         st.text_input("Yahoo Finance Code (Auto-Filled)", value=target_symbol, disabled=True)
 with col3:
     monthly_budget = st.number_input("Monthly SIP Budget (₹)", value=10000, step=1000)
+
+# --- NEW: TELEGRAM CHECKBOX ---
+send_alert = st.checkbox("📱 Send Telegram Alert on Analysis")
 
 st.write("<br>", unsafe_allow_html=True)
 
@@ -156,19 +159,54 @@ if st.button("🔍 Run Wealth Analysis", type="primary"):
                 # --- CAPITAL ALLOCATION ENGINE ---
                 st.subheader("💡 Capital Allocation Engine")
                 
+                # We extract the action titles and emojis so we can pass them to Telegram
+                action_title = ""
+                action_emoji = ""
+                
                 if drawdown_pct <= -15 and current_rsi < 40:
-                    st.success(f"🎯 **ACTION: AGGRESSIVE LUMP SUM.**")
+                    action_title = "AGGRESSIVE LUMP SUM"
+                    action_emoji = "🎯"
+                    st.success(f"{action_emoji} **ACTION: {action_title}.**")
                     st.write(f"The fund is in a deep correction ({drawdown_pct:.2f}%) and mathematically oversold. Deploy your SIP + any extra cash reserves now.")
                 elif current_ema_200 is not None and current_nav < current_ema_200:
-                    st.info(f"📈 **ACTION: INCREASE SIP.**")
+                    action_title = "INCREASE SIP"
+                    action_emoji = "📈"
+                    st.info(f"{action_emoji} **ACTION: {action_title}.**")
                     st.write(f"The NAV is below its 200-Day average. You are buying at a long-term discount. Increase your ₹{monthly_budget} SIP by 20% this month if possible.")
                 elif drawdown_pct > -5 and current_rsi > 70:
-                    st.warning(f"⚠️ **ACTION: STRICT SIP ONLY.**")
+                    action_title = "STRICT SIP ONLY"
+                    action_emoji = "⚠️"
+                    st.warning(f"{action_emoji} **ACTION: {action_title}.**")
                     st.write(f"The fund is overheated near All-Time Highs. Do NOT deploy lump sums here. Stick strictly to your automated ₹{monthly_budget} SIP.")
                 else:
-                    st.info(f"🧘 **ACTION: NORMAL SIP.**")
+                    action_title = "NORMAL SIP"
+                    action_emoji = "🧘"
+                    st.info(f"{action_emoji} **ACTION: {action_title}.**")
                     st.write(f"The fund is compounding normally. Continue your standard ₹{monthly_budget} automated SIP.")
                 
+                # --- NEW: TELEGRAM LOGIC ---
+                fund_name_display = selected_fund if selected_fund != "Custom (Enter Symbol Below)" else target_symbol
+                cagr_display = f"{cagr_3y:.1f}%" if cagr_3y is not None else "N/A"
+                
+                telegram_msg = f"{action_emoji} {action_title} | {fund_name_display} | NAV: ₹{current_nav:.2f} | 3Y CAGR: {cagr_display} | Drawdown: {drawdown_pct:.1f}%"
+                
+                st.info(f"**Generated Telegram Push:**\n\n`{telegram_msg}`")
+                
+                if send_alert:
+                    # HARDCODED CREDENTIALS
+                    bot_token = "8701094564:AAFQER8tQAl2NwGEkKsY1LTV5zUP_7gT4Tg"
+                    chat_id = "7927166007"
+                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    payload = {"chat_id": chat_id, "text": telegram_msg}
+                    try:
+                        resp = requests.post(url, json=payload)
+                        if resp.status_code == 200:
+                            st.success("✅ Successfully pushed to Telegram!")
+                        else:
+                            st.error(f"Failed to send: {resp.text}")
+                    except Exception as e:
+                        st.error(f"Telegram API Error: {e}")
+
                 st.divider()
 
                 # --- THE ULTIMATE BENCHMARK GRAPH ---
