@@ -251,6 +251,8 @@ with tab2:
         uploaded_file = st.file_uploader("Upload Zerodha Coin File", type=["csv", "xlsx"])
     with col_sip:
         sip_budget = st.number_input("Target Monthly SIP Budget (₹)", value=20000, step=1000, key="rationalizer_budget")
+        # --- NEW: TELEGRAM CHECKBOX FOR TAB 2 ---
+        send_rat_alert = st.checkbox("📱 Send Plan to Telegram", key="rat_tg_alert")
         
     display_df = pd.DataFrame()
     
@@ -258,7 +260,6 @@ with tab2:
         try:
             file_ext = uploaded_file.name.split('.')[-1].lower()
             
-            # Read the raw file to find where the actual table starts (bypassing the 22 rows of junk)
             if file_ext == 'csv':
                 raw_df = pd.read_csv(uploaded_file, header=None)
             else:
@@ -267,7 +268,6 @@ with tab2:
             header_mask = raw_df.apply(lambda row: row.astype(str).str.contains('Instrument|Scheme|Symbol', case=False).any(), axis=1)
             header_row_idx = raw_df[header_mask].index
             
-            # Reset file pointer to read again properly
             uploaded_file.seek(0)
             
             if len(header_row_idx) > 0:
@@ -282,7 +282,6 @@ with tab2:
                 else:
                     df = pd.read_excel(uploaded_file)
             
-            # Standardize Columns
             col_mapping = {
                 "Instrument": "Fund Name", "Scheme": "Fund Name", "Symbol": "Fund Name",
                 "Current value": "Current Value (₹)", "Present Value": "Current Value (₹)",
@@ -290,7 +289,6 @@ with tab2:
             }
             df.rename(columns=col_mapping, inplace=True)
             
-            # --- THE FIX: SMART CALCULATOR FOR CONSOLE EXPORTS ---
             if "Invested (₹)" not in df.columns and "Average Price" in df.columns and "Quantity Available" in df.columns:
                 df["Invested (₹)"] = df["Average Price"] * df["Quantity Available"]
                 
@@ -304,7 +302,6 @@ with tab2:
             st.error(f"Error parsing file. Please ensure it is the correct holdings file. Details: {e}")
             display_df = pd.DataFrame(columns=["Fund Name", "Invested (₹)", "Current Value (₹)"])
     else:
-        # Dummy data so the screen isn't empty before upload
         display_df = pd.DataFrame([
             {"Fund Name": "UTI Nifty 50 Index", "Invested (₹)": 169888, "Current Value (₹)": 180262},
             {"Fund Name": "Sundaram Multi Asset", "Invested (₹)": 143222, "Current Value (₹)": 168000},
@@ -322,14 +319,12 @@ with tab2:
             overlap_flags = {"Index": False, "Flexi": 0, "Large": False}
             clutter_count = 0
             
-            # First Pass: Identify categories to check for overlap
             for _, row in edited_mf_df.iterrows():
                 name = str(row['Fund Name']).lower()
                 if "index" in name or "nifty 50" in name: overlap_flags["Index"] = True
                 if "large cap" in name or "bluechip" in name: overlap_flags["Large"] = True
                 if "flexi" in name or "multi cap" in name: overlap_flags["Flexi"] += 1
             
-            # Second Pass: Generate Verdicts
             for _, row in edited_mf_df.iterrows():
                 name = str(row['Fund Name'])
                 inv = float(row['Invested (₹)'])
@@ -343,7 +338,6 @@ with tab2:
                 reason = "Solid allocation."
                 name_lower = name.lower()
                 
-                # Tagging Engine
                 if "index" in name_lower or "nifty 50" in name_lower: type_tag = "Index"
                 elif "flexi" in name_lower: type_tag = "Flexi Cap"
                 elif "large cap" in name_lower or "bluechip" in name_lower: type_tag = "Large Cap"
@@ -353,20 +347,16 @@ with tab2:
                 elif "value" in name_lower: type_tag = "Value"
                 elif "fof" in name_lower or "nasdaq" in name_lower or "us tech" in name_lower: type_tag = "International"
                 
-                # Rule 1: Administrative Clutter (Less than ₹10,000)
                 if cur < 10000:
                     verdict = "🔴 EXIT (Clutter)"
                     reason = f"Negligible size ({pct_of_pf:.1f}% of PF). Exit to reduce tracking headache."
                     clutter_count += 1
-                # Rule 2: Index vs Large Cap Overlap
                 elif type_tag == "Large Cap" and overlap_flags["Index"]:
                     verdict = "🔴 EXIT (Overlap)"
                     reason = "Significant overlap with your Nifty 50 Index. Redirect SIP to Index."
-                # Rule 3: Redundant Flexi Caps
                 elif type_tag == "Flexi Cap" and overlap_flags["Flexi"] > 1 and pct_of_pf < 5:
                     verdict = "🔴 EXIT (Consolidate)"
                     reason = "Small redundant Flexi Cap. Consolidate into your primary one."
-                # Rule 4: Core Anchors
                 elif type_tag == "Index" and pct_of_pf > 10:
                     verdict = "🟢 KEEP + INCREASE"
                     reason = "Core equity anchor. Lowest cost. Increase SIP here."
@@ -399,6 +389,35 @@ with tab2:
                 {"Fund Role": "Alpha Generator (Small/Mid Cap)", "Target Allocation": "10%", "Recommended SIP": f"₹{sip_budget * 0.10:,.0f}"}
             ]
             st.table(pd.DataFrame(target_pf))
+
+            # --- NEW: TELEGRAM LOGIC FOR RATIONALIZER ---
+            if send_rat_alert:
+                tg_msg = "🧹 *Mutual Fund Rationalization Plan*\n\n"
+                tg_msg += f"⚠️ *Status:* {len(edited_mf_df)} Funds Analyzed | {clutter_count} Junk Positions.\n\n"
+                
+                tg_msg += "*Action Plan:*\n"
+                for r in results:
+                    verdict_icon = r['VERDICT'].split(' ')[0]
+                    action_text = r['VERDICT'].replace(verdict_icon, '').strip()
+                    tg_msg += f"{verdict_icon} {action_text} | {r['FUND']}\n"
+                
+                tg_msg += f"\n🎯 *Recommended SIP (₹{sip_budget:,.0f}/mo):*\n"
+                for t in target_pf:
+                    tg_msg += f"• {t['Target Allocation']} {t['Fund Role']} -> {t['Recommended SIP']}\n"
+                
+                bot_token = "8701094564:AAFQER8tQAl2NwGEkKsY1LTV5zUP_7gT4Tg"
+                chat_id = "7927166007"
+                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                payload = {"chat_id": chat_id, "text": tg_msg, "parse_mode": "Markdown"}
+                
+                try:
+                    resp = requests.post(url, json=payload)
+                    if resp.status_code == 200:
+                        st.success("✅ Rationalization Plan sent to Telegram successfully!")
+                    else:
+                        st.error(f"Failed to send to Telegram: {resp.text}")
+                except Exception as e:
+                    st.error(f"Telegram API Error: {e}")
 
 st.divider()
 
